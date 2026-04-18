@@ -1,6 +1,9 @@
 <script>
   import { onDestroy } from 'svelte';
-  import rawData from './episodes.json';
+  import FriendsTitle from '@/FriendsTitle.svelte';
+  import rawData from '@/episodes.json';
+  import { relativeDay } from '@/relativeDay.js';
+
 
   // ---------------------------------------------------------------------------
   // Data
@@ -163,8 +166,8 @@
   <!-- HEADER -->
   <header>
     <h1>
-      SHOULD I WATCH
-      <span class="friends-title">Friends</span>
+      SHOULD I WATCH<br>
+      <FriendsTitle /><br>
       TODAY?
     </h1>
   </header>
@@ -195,7 +198,7 @@
             aria-expanded={showNextEpisodes}>
             {nextCount} {nextCount === 1 ? 'episode' : 'episodes'}
           </button>
-          that aired on {nextMonthDay}, that's in {daysUntilNext} {daysUntilNext === 1 ? 'day' : 'days'} on {nextDayOfWeek}.
+          that aired on {nextMonthDay}. <b>That's {relativeDay(daysUntilNext)}</b>.
         </p>
 
         {#if showNextEpisodes}
@@ -256,8 +259,6 @@
 </main>
 
 <style>
-  /*
-   */
   @font-face {
     font-family: 'Friends';
     src: url('/friends.ttf') format('truetype');
@@ -273,8 +274,24 @@
 
   :global(html) {
     font-family: 'Inter', sans-serif;
-    font-feature-settings: 'cv02','cv03','cv04','cv11';
-    background: #fdf8f2;
+    font-feature-settings: 
+      'liga' 1,
+      'calt' 1,
+      'dlig' 1,
+      'tnum' 1,
+      'frac' 1,
+      'ss02' 1,
+      'ss03' 1,
+
+      'zero' 1,
+      'cv01' 1,
+      'cv09' 1,
+      'cv03' 1,
+      'cv04' 1,
+
+      'cv10' 1
+      ;
+    background: #dbd7cb;
     color: #1a1a1a;
   }
 
@@ -300,27 +317,15 @@
     text-align: center;
     margin-bottom: 56px;
     padding-bottom: 40px;
-    border-bottom: 2px solid #f0e0cc;
   }
 
   h1 {
     font-size: clamp(1.5rem, 4vw, 2.2rem);
     font-weight: 800;
     letter-spacing: 0.06em;
-    line-height: 1.2;
+    line-height: 1.5;
     color: #1a1a1a;
     text-transform: uppercase;
-  }
-
-  .friends-title {
-    font-family: 'Friends', 'Georgia', serif;
-    font-size: 1.35em;
-    color: #e8690a;
-    letter-spacing: 0.02em;
-    text-transform: none;
-    display: inline-block;
-    vertical-align: middle;
-    line-height: 1;
   }
 
   /* -------------------------------------------------------------------------
