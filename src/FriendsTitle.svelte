@@ -17,8 +17,8 @@
 <style>
   .friends-logo {
     font-family: 'Friends';
-    color: #ffffff;
-    text-shadow: 2px 2px 0px #000000;
+    color: #fff;
+    text-shadow: 2px 2px 0px #000;
     display: inline-flex;
     align-items: center;
     gap: 0;

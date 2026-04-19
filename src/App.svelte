@@ -1,8 +1,9 @@
 <script>
-  import { onDestroy } from 'svelte';
+  import { onDestroy, tick } from 'svelte';
   import FriendsTitle from '@/FriendsTitle.svelte';
   import rawData from '@/episodes.json';
-  import { relativeDay } from '@/relativeDay.js';
+  import SlotMachine from '@/SlotMachine.svelte';
+
 
 
   // ---------------------------------------------------------------------------
@@ -25,6 +26,30 @@
       day:   parseInt(parts[1]),
       year:  parseInt(parts[2])
     };
+  }
+
+  function episodeCount(n) {
+    const words = ['One','Two','Three','Four'];
+    const word = words[n - 1] ?? n;
+    return `${word} ${n === 1 ? 'episode' : 'episodes'}`;
+  }
+
+  function relativeDay(days, from = new Date()) {
+    const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+
+    if (days === 1) return 'tomorrow';
+    if (days === 2) return 'the day after tomorrow';
+    if (days <= 6)  return `in ${days} days`;
+
+    if (days <= 13) {
+      const target = new Date(from);
+      target.setDate(target.getDate() + days);
+      return `next ${DAYS[target.getDay()]}`;
+    }
+
+    if (days === 14) return 'in two weeks';
+
+    return `in ${days} days`;
   }
 
   // ---------------------------------------------------------------------------
@@ -97,9 +122,9 @@
       ? ` in ${years[0]}`
       : years.length > 1 ? ` in ${years.slice(0,-1).join(', ')} and ${years[years.length-1]}` : '';
     if (episodes.length === 1) {
-      return `Yes! This episode aired today${yearSuffix}`;
+      return `Yes! This episode first aired on this day${yearSuffix}`;
     }
-    return `Yes! These ${episodes.length} episodes aired today${yearSuffix}`;
+    return `Yes! These ${episodeCount(episodes.length).toLowerCase()} first aired on this day${yearSuffix}`;
   }
 
   // ---------------------------------------------------------------------------
@@ -107,55 +132,23 @@
   // ---------------------------------------------------------------------------
 
   let showNextEpisodes = false;
-  let slotActive       = false;
-  let slotEpisode      = null;  // episode shown while spinning
-  let pickedEpisode    = null;  // final result
-  let timeouts         = [];
 
-  function startSlot() {
-    if (slotActive) return;
-    slotActive       = true;
-    pickedEpisode    = null;
-    showNextEpisodes = false;
+  let slotMachine;
+  let slotActive = false;
+  let pickedEpisode = null;
 
-    const target = randomPool[Math.floor(Math.random() * randomPool.length)];
-
-    // Build schedule: fast -> slow
-    const schedule = [
-      ...Array(20).fill(50),
-      ...Array(10).fill(100),
-      ...Array(6).fill(180),
-      ...Array(4).fill(320),
-      500, 700, 950
-    ];
-
-    let accumulated = 0;
-    const total = schedule.length;
-
-    schedule.forEach((delay, i) => {
-      accumulated += delay;
-      const t = setTimeout(() => {
-        if (i < total - 1) {
-          slotEpisode = randomPool[Math.floor(Math.random() * randomPool.length)];
-        } else {
-          slotEpisode   = null;
-          pickedEpisode = target;
-          slotActive    = false;
-        }
-      }, accumulated);
-      timeouts.push(t);
-    });
+  async function startSlot() {
+    pickedEpisode = null;
+    slotActive = true;
+    await tick();   
+    slotMachine.start();
   }
 
   function resetSlot() {
-    timeouts.forEach(clearTimeout);
-    timeouts       = [];
-    slotActive     = false;
-    slotEpisode    = null;
-    pickedEpisode  = null;
+    slotMachine.stop();
+    slotActive = false;
+    startSlot();
   }
-
-  onDestroy(() => timeouts.forEach(clearTimeout));
 </script>
 
 <!-- =========================================================================
@@ -189,16 +182,16 @@
       </div>
     {:else}
       <!-- CASE 2: Nothing today -->
-      <h2 class="answer-no">Yes, but none aired on this day.</h2>
+      <h2 class="answer-no">Yes, but nothing aired on this day.</h2>
 
       {#if nextEntry}
         <p class="next-line">
-          There {nextCount === 1 ? 'is' : 'are'}
           <button class="n-link" on:click={() => showNextEpisodes = !showNextEpisodes}
             aria-expanded={showNextEpisodes}>
-            {nextCount} {nextCount === 1 ? 'episode' : 'episodes'}
+            {episodeCount(nextCount)}
           </button>
-          that aired on {nextMonthDay}. <b>That's {relativeDay(daysUntilNext)}</b>.
+          aired on {nextMonthDay}.<br>
+          <b>That's {relativeDay(daysUntilNext)}</b>.
         </p>
 
         {#if showNextEpisodes}
@@ -217,31 +210,19 @@
 
       <p class="cant-wait">
         Can't wait that long?
-        {#if !slotActive && !pickedEpisode}
-          <span class="random-link" role="button" tabindex="0"
-            on:click={startSlot}
-            on:keydown={e => e.key === 'Enter' && startSlot()}>
-            Watch a random episode!
-          </span>
-        {:else if pickedEpisode}
-          <span class="random-link" role="button" tabindex="0"
-            on:click={resetSlot}
-            on:keydown={e => e.key === 'Enter' && resetSlot()}>
-            Try again?
-          </span>
-        {/if}
+        <span class="random-link" role="button" tabindex="0"
+          class:hidden={slotActive}
+          on:click={pickedEpisode ? resetSlot : startSlot}
+          on:keydown={e => e.key === 'Enter' && (pickedEpisode ? resetSlot() : startSlot())}>
+          {pickedEpisode ? 'Try again?' : 'Watch a random episode!'}
+        </span>
       </p>
 
-      <!-- Slot machine -->
-      {#if slotActive && slotEpisode}
-        <div class="slot-machine" aria-live="polite">
-          <div class="slot-reel">
-            <span class="slot-text">
-              Season {slotEpisode.season}, Episode {slotEpisode.episode} &mdash; {slotEpisode.title}
-            </span>
-          </div>
-        </div>
-      {/if}
+      <SlotMachine
+        bind:this={slotMachine}
+        pool={randomPool}
+        on:picked={e => { pickedEpisode = e.detail; slotActive = false }}
+      />
 
       <!-- Picked episode -->
       {#if pickedEpisode}
@@ -257,276 +238,3 @@
     {/if}
   </section>
 </main>
-
-<style>
-  @font-face {
-    font-family: 'Friends';
-    src: url('/friends.ttf') format('truetype');
-    font-weight: normal;
-    font-style:  normal;
-  }
-
-  :global(*, *::before, *::after) {
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0;
-  }
-
-  :global(html) {
-    font-family: 'Inter', sans-serif;
-    font-feature-settings: 
-      'liga' 1,
-      'calt' 1,
-      'dlig' 1,
-      'tnum' 1,
-      'frac' 1,
-      'ss02' 1,
-      'ss03' 1,
-
-      'zero' 1,
-      'cv01' 1,
-      'cv09' 1,
-      'cv03' 1,
-      'cv04' 1,
-
-      'cv10' 1
-      ;
-    background: #dbd7cb;
-    color: #1a1a1a;
-  }
-
-  :global(body) {
-    min-height: 100vh;
-  }
-
-  /* -------------------------------------------------------------------------
-     Layout
-     ---------------------------------------------------------------------- */
-
-  main {
-    max-width: 720px;
-    margin: 0 auto;
-    padding: 48px 24px 96px;
-  }
-
-  /* -------------------------------------------------------------------------
-     Header
-     ---------------------------------------------------------------------- */
-
-  header {
-    text-align: center;
-    margin-bottom: 56px;
-    padding-bottom: 40px;
-  }
-
-  h1 {
-    font-size: clamp(1.5rem, 4vw, 2.2rem);
-    font-weight: 800;
-    letter-spacing: 0.06em;
-    line-height: 1.5;
-    color: #1a1a1a;
-    text-transform: uppercase;
-  }
-
-  /* -------------------------------------------------------------------------
-     Answer section
-     ---------------------------------------------------------------------- */
-
-  .answer {
-    display: flex;
-    flex-direction: column;
-    gap: 28px;
-  }
-
-  h2 {
-    font-size: clamp(1.25rem, 3vw, 1.75rem);
-    font-weight: 700;
-    line-height: 1.3;
-  }
-
-  .answer-yes {
-    color: #1a1a1a;
-  }
-
-  .answer-no {
-    color: #1a1a1a;
-  }
-
-  /* -------------------------------------------------------------------------
-     Episode cards
-     ---------------------------------------------------------------------- */
-
-  .episodes {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-  }
-
-  .ep-card {
-    background: #fff;
-    border: 1px solid #f0e0cc;
-    border-left: 4px solid #e8690a;
-    border-radius: 8px;
-    padding: 24px 28px;
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-  }
-
-  .ep-card.picked {
-    border-left-color: #d4a017;
-    background: #fffbf3;
-  }
-
-  .ep-title {
-    font-size: 1.15rem;
-    font-weight: 700;
-    color: #1a1a1a;
-    line-height: 1.3;
-  }
-
-  .ep-date {
-    font-size: 0.85rem;
-    font-weight: 500;
-    color: #888;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-  }
-
-  .ep-desc {
-    font-size: 0.95rem;
-    line-height: 1.6;
-    color: #444;
-  }
-
-  .ep-meta {
-    font-size: 0.82rem;
-    font-weight: 600;
-    color: #e8690a;
-    letter-spacing: 0.04em;
-    text-transform: uppercase;
-    margin-top: 4px;
-  }
-
-  /* -------------------------------------------------------------------------
-     Next episodes line
-     ---------------------------------------------------------------------- */
-
-  .next-line {
-    font-size: 1rem;
-    line-height: 1.7;
-    color: #444;
-  }
-
-  /* n-link: looks like inline text, underlined */
-  .n-link {
-    background: none;
-    border: none;
-    padding: 0;
-    font: inherit;
-    font-weight: 600;
-    color: #e8690a;
-    text-decoration: underline;
-    text-decoration-style: dotted;
-    text-underline-offset: 3px;
-    cursor: pointer;
-    transition: color 0.15s;
-  }
-
-  .n-link:hover,
-  .n-link:focus {
-    color: #c45507;
-    outline: none;
-  }
-
-  .next-episodes {
-    margin-top: -8px;
-  }
-
-  /* -------------------------------------------------------------------------
-     Can't wait / random link
-     ---------------------------------------------------------------------- */
-
-  .cant-wait {
-    font-size: 1rem;
-    color: #444;
-    line-height: 1.7;
-  }
-
-  .random-link {
-    font-weight: 600;
-    color: #e8690a;
-    text-decoration: underline;
-    text-decoration-style: solid;
-    text-underline-offset: 3px;
-    cursor: pointer;
-    transition: color 0.15s;
-  }
-
-  .random-link:hover,
-  .random-link:focus {
-    color: #c45507;
-    outline: none;
-  }
-
-  /* -------------------------------------------------------------------------
-     Slot machine
-     ---------------------------------------------------------------------- */
-
-  .slot-machine {
-    border: 2px solid #f0e0cc;
-    border-radius: 8px;
-    background: #fff;
-    padding: 0;
-    overflow: hidden;
-  }
-
-  .slot-reel {
-    padding: 20px 28px;
-    min-height: 68px;
-    display: flex;
-    align-items: center;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 33px,
-      #fdf1e4 33px,
-      #fdf1e4 34px
-    );
-  }
-
-  .slot-text {
-    font-size: 1rem;
-    font-weight: 600;
-    color: #1a1a1a;
-    letter-spacing: 0.01em;
-    animation: blur-in 0.08s ease-out;
-  }
-
-  @keyframes blur-in {
-    from { opacity: 0; transform: translateY(-6px); }
-    to   { opacity: 1; transform: translateY(0); }
-  }
-
-  .picked-result {
-    margin-top: -8px;
-  }
-
-  /* -------------------------------------------------------------------------
-     Responsive
-     ---------------------------------------------------------------------- */
-
-  @media (max-width: 480px) {
-    main {
-      padding: 32px 16px 64px;
-    }
-
-    .ep-card {
-      padding: 20px 20px;
-    }
-
-    .slot-reel {
-      padding: 16px 20px;
-    }
-  }
-</style>
