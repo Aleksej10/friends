@@ -190,7 +190,8 @@
             aria-expanded={showNextEpisodes}>
             {episodeCount(nextCount)}
           </button>
-          aired on {nextMonthDay}.<br>
+          aired on {nextMonthDay}.
+          <br class="mobile-br">
           <b>That's {relativeDay(daysUntilNext)}</b>.
         </p>
 
@@ -210,6 +211,9 @@
 
       <p class="cant-wait">
         Can't wait that long?
+        {#if !pickedEpisode }
+          <br class="mobile-br">
+        {/if}
         <span class="random-link" role="button" tabindex="0"
           class:hidden={slotActive}
           on:click={pickedEpisode ? resetSlot : startSlot}
