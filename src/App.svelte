@@ -34,19 +34,12 @@
     return `${word} ${n === 1 ? 'episode' : 'episodes'}`;
   }
 
-  function relativeDay(days, from = new Date()) {
-    const DAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-
-    if (days === 1) return 'tomorrow';
-    if (days === 2) return 'the day after tomorrow';
-    if (days <= 6)  return `in ${days} days`;
-
-    if (days <= 13) {
-      const target = new Date(from);
-      target.setDate(target.getDate() + days);
-      return `next ${DAYS[target.getDay()]}`;
-    }
-
+  // Do not name a weekday past one week out. A reader takes "next Saturday" as the
+  // first Saturday from now, so a date 13 days away would get the wrong name.
+  function relativeDay(days) {
+    if (days === 1)  return 'tomorrow';
+    if (days === 2)  return 'the day after tomorrow';
+    if (days === 7)  return 'in a week';
     if (days === 14) return 'in two weeks';
 
     return `in ${days} days`;
